@@ -328,6 +328,8 @@ angular.module('mentio', [])
                     }
                 }
 
+                element.on('keydown keypress paste', keyHandler);
+
                 scope.$watch(
                     'iframeElement', function(newValue) {
                         if (newValue) {
@@ -606,7 +608,7 @@ angular.module('mentio', [])
                 scope.adjustScroll = function (direction) {
                     var menuEl = element[0];
                     var menuItemsList = menuEl.querySelector('ul');
-                    var menuItem = (menuEl.querySelector('[mentio-menu-item].active') || 
+                    var menuItem = (menuEl.querySelector('[mentio-menu-item].active') ||
                         menuEl.querySelector('[data-mentio-menu-item].active'));
 
                     if (scope.isFirstItemActive()) {
