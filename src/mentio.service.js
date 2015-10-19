@@ -3,6 +3,8 @@
 angular.module('mentio')
     .factory('mentioUtil', function ($window, $location, $anchorScroll, $timeout) {
 
+        var delimiters = ' \'.,;!?'.split('');
+
         // public
         function popUnderMention (ctx, triggerCharSet, selectionEl, requireLeadingSpace) {
             var coordinates;
@@ -174,8 +176,8 @@ angular.module('mentio')
         }
 
         // public
-        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet, 
-                text, requireLeadingSpace, hasTrailingSpace) {
+        function replaceTriggerText (ctx, targetElement, path, offset, triggerCharSet,
+                                     text, requireLeadingSpace, hasTrailingSpace) {
             resetSelection(ctx, targetElement, path, offset);
 
             var mentionInfo = getTriggerInfo(ctx, triggerCharSet, requireLeadingSpace, true, hasTrailingSpace);
@@ -183,18 +185,32 @@ angular.module('mentio')
             if (mentionInfo !== undefined) {
                 if (selectedElementIsTextAreaOrInput()) {
                     var myField = getDocument(ctx).activeElement;
-                    text = text + ' ';
+
                     var startPos = mentionInfo.mentionPosition;
                     var endPos = mentionInfo.mentionPosition + mentionInfo.mentionText.length + 1;
+
+                    var trailingChar = mentionInfo.mentionText.slice(-1);
+                    var isDelimited = false;
+
+                    isDelimited = delimiters.some(function(del){
+                        return (trailingChar === del);
+                    });
+
+                    if(isDelimited && trailingChar !== ' '){
+                        // retain the trailing delimiter
+                        text = text + trailingChar;
+                    }
+                    text = text + ' ';
+
                     myField.value = myField.value.substring(0, startPos) + text +
-                        myField.value.substring(endPos, myField.value.length);
+                    myField.value.substring(endPos, myField.value.length);
                     myField.selectionStart = startPos + text.length;
                     myField.selectionEnd = startPos + text.length;
                 } else {
                     // add a space to the end of the pasted text
                     text = text + '\xA0';
                     pasteHtml(ctx, text, mentionInfo.mentionPosition,
-                            mentionInfo.mentionPosition + mentionInfo.mentionText.length + 1);
+                        mentionInfo.mentionPosition + mentionInfo.mentionText.length + 1);
                 }
             }
         }
@@ -228,10 +244,22 @@ angular.module('mentio')
             }
             var effectiveRange = getTextPrecedingCurrentSelection(ctx);
             if (effectiveRange !== undefined && effectiveRange !== null) {
-
                 var matchInfo;
-
                 var hasTrailingSpace = false;
+
+                if(delimiters && delimiters.length>0){
+                    var delimited = delimiters.some(function(d){
+                        if(effectiveRange.charAt(effectiveRange.length - 1) === d){
+                            return true;
+                        }
+                    });
+                    if(!delimited){
+                        return;
+                    }
+                    else{
+                        effectiveRange = effectiveRange.substring(0, effectiveRange.length-1);
+                    }
+                }
 
                 if (effectiveRange.length > 0 &&
                     (effectiveRange.charAt(effectiveRange.length - 1) === '\xA0' ||
@@ -297,7 +325,7 @@ angular.module('mentio')
         // public
         function getTriggerInfo (ctx, triggerCharSet, requireLeadingSpace, menuAlreadyActive, hasTrailingSpace) {
             /*jshint maxcomplexity:11 */
-            // yes this function needs refactoring 
+            // yes this function needs refactoring
             var selected, path, offset;
             if (selectedElementIsTextAreaOrInput(ctx)) {
                 selected = getDocument(ctx).activeElement;
@@ -318,8 +346,25 @@ angular.module('mentio')
                 triggerCharSet.forEach(function(c) {
                     var idx = effectiveRange.lastIndexOf(c);
                     if (idx > mostRecentTriggerCharPos) {
-                        mostRecentTriggerCharPos = idx;
-                        triggerChar = c;
+                        if(c.length === 1) // single character trigger
+                        {
+                            mostRecentTriggerCharPos = idx;
+                            triggerChar = c;
+                        }
+                        else{ // word trigger, check that it is preceded by a space and followed by a delimiter
+                            if(idx===0 || effectiveRange.charAt(idx-1)===' '){ // preceded by space
+                                var followingChars = effectiveRange.substring(idx);
+                                if(followingChars.length > c.length){
+                                    var isDelimited = delimiters.some(function(del){
+                                        return followingChars.charAt(c.length) === del;
+                                    });
+                                    if(isDelimited){
+                                        mostRecentTriggerCharPos = idx;
+                                        triggerChar = c;
+                                    }
+                                }
+                            }
+                        }
                     }
                 });
                 if (mostRecentTriggerCharPos >= 0 &&
@@ -338,14 +383,13 @@ angular.module('mentio')
                     var currentTriggerSnippet = effectiveRange.substring(mostRecentTriggerCharPos + 1,
                         effectiveRange.length);
 
-                    triggerChar = effectiveRange.substring(mostRecentTriggerCharPos, mostRecentTriggerCharPos+1);
                     var firstSnippetChar = currentTriggerSnippet.substring(0,1);
                     var leadingSpace = currentTriggerSnippet.length > 0 &&
                         (
                             firstSnippetChar === ' ' ||
                             firstSnippetChar === '\xA0'
                         );
-                    if (hasTrailingSpace) {
+                    if (hasTrailingSpace || triggerChar.length > 1) {
                         currentTriggerSnippet = currentTriggerSnippet.trim();
                     }
                     if (!leadingSpace && (menuAlreadyActive || !(/[\xA0\s]/g.test(currentTriggerSnippet)))) {
@@ -442,7 +486,7 @@ angular.module('mentio')
                     obj = iframe;
                     iframe = null;
                 }
-            }            
+            }
             obj = element;
             iframe = ctx ? ctx.iframe : null;
             while(obj !== getDocument().body) {
@@ -457,7 +501,7 @@ angular.module('mentio')
                     obj = iframe;
                     iframe = null;
                 }
-            }            
+            }
          }
 
         function getTextAreaOrInputUnderlinePosition (ctx, element, position) {

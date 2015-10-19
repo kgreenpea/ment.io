@@ -16,6 +16,7 @@ angular.module('mentio', [])
                 requireLeadingSpace: '=mentioRequireLeadingSpace',
                 selectNotFound: '=mentioSelectNotFound',
                 trimTerm: '=mentioTrimTerm',
+                propagateEvents: '=mentioPropagateEvents',
                 ngModel: '='
             },
             controller: function($scope, $timeout, $attrs) {
@@ -162,15 +163,22 @@ angular.module('mentio', [])
                 };
 
                 $scope.addMenu = function(menuScope) {
-                    if (menuScope.parentScope && $scope.triggerCharMap.hasOwnProperty(menuScope.triggerChar)) {
-                        return;
-                    }
-                    $scope.triggerCharMap[menuScope.triggerChar] = menuScope;
-                    if ($scope.triggerCharSet === undefined) {
-                        $scope.triggerCharSet = [];
-                    }
-                    $scope.triggerCharSet.push(menuScope.triggerChar);
-                    menuScope.setParent($scope);
+                    var triggers = menuScope.triggerChar.split(',');
+                    triggers.forEach(function(trigger){
+                        if (menuScope.parentScope && $scope.triggerCharMap.hasOwnProperty(trigger)) {
+                            return;
+                        }
+
+                        $scope.triggerCharMap[trigger] = menuScope;
+                        if ($scope.triggerCharSet === undefined) {
+                            $scope.triggerCharSet = [];
+                        }
+                        $scope.triggerCharSet.push(trigger);
+
+                        if(!menuScope.parentScope){
+                            menuScope.setParent($scope);
+                        }
+                    });
                 };
 
                 $scope.$on(
@@ -245,8 +253,10 @@ angular.module('mentio', [])
                 function keyHandler(event) {
                     function stopEvent(event) {
                         event.preventDefault();
-                        event.stopPropagation();
-                        event.stopImmediatePropagation();
+                        if(!scope.propagateEvents){
+                            event.stopPropagation();
+                            event.stopImmediatePropagation();
+                        }
                     }
                     var activeMenuScope = scope.getActiveMenuScope();
                     if (activeMenuScope) {
@@ -289,6 +299,7 @@ angular.module('mentio', [])
                     }
                 }
 
+                // Bind key handler to directive's element
                 element.on('keydown keypress paste', keyHandler);
 
                 scope.$watch(
@@ -551,7 +562,10 @@ angular.module('mentio', [])
                     // wait for the watch notification to show the menu
                     if (visible) {
                         var triggerCharSet = [];
-                        triggerCharSet.push(scope.triggerChar);
+                        scope.triggerChar.split(',').forEach(function(trigger){
+                            triggerCharSet.push(trigger);
+                        });
+
                         mentioUtil.popUnderMention(scope.parentMentio.context(),
                             triggerCharSet, element, scope.requireLeadingSpace);
                     }
